@@ -1,0 +1,2345 @@
+---
+title: "2.0-premat-ncog-matched-analysis"
+author: "Phil"
+date: "9/17/2019"
+output:
+  html_document: default
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries and load data, include=FALSE, echo=FALSE}
+sapply(c("tidyverse", "purrr", "here","knitr", "kableExtra","ggpubr","cowplot","gridExtra", "ggstatsplot", "broom"), require, character.only = TRUE)
+
+dat <- read_csv("2.0-premat-matched.csv") %>% 
+  mutate(prem_cat = case_when(premature_category == 0 ~ "Full term",
+                                        premature_category == 1 ~ "Very premature"),
+         prem_cat = as.factor(as.character(prem_cat)))
+
+options(knitr.table.format = "html")
+set.seed(123)
+```
+
+```{r tables, echo=FALSE, message=FALSE, include=FALSE}
+
+ncog_tasks <- names(dat %>% select(nihtbx_cardsort_rawscore:pea_wiscv_trs))
+cbcl_raw_names <- names(dat %>% select(contains("cbcl")))
+
+ncog_gathered_prematurity <- dat %>% group_by(prem_cat) %>% 
+   summarise_at(ncog_tasks, list(mean = mean,sd = sd), na.rm = TRUE)
+
+cbcl_gathered_prematurity <- dat %>% group_by(prem_cat) %>%
+  summarise_at(cbcl_raw_names, list(mean = mean, sd = sd), na.rm = TRUE)
+
+ncog_means <- ncog_gathered_prematurity %>% gather(task, mean, nihtbx_cardsort_rawscore_mean:pea_wiscv_trs_mean) %>% select(prem_cat, task, mean)
+
+cbcl_means <- cbcl_gathered_prematurity %>% gather(task, mean, contains("_mean")) %>% select(prem_cat, task, mean)
+
+ncog_sds <- ncog_gathered_prematurity %>% gather(task, sd, nihtbx_cardsort_rawscore_sd:pea_wiscv_trs_sd) %>%
+  select(prem_cat, task, sd)
+
+cbcl_sds <- cbcl_gathered_prematurity %>% gather(task, sd, contains("_sd")) %>%
+  select(prem_cat, task, sd)
+
+ncog_means$task <- gsub("_mean", "", ncog_means$task)
+cbcl_means$task <- gsub("_mean", "", cbcl_means$task)
+
+ncog_sds$task <- gsub("_sd", "", ncog_sds$task)
+cbcl_sds$task <- gsub("_sd", "", cbcl_sds$task)
+
+ncog_means_and_sd <- ncog_means %>% left_join(ncog_sds, by = c("prem_cat","task"))
+cbcl_means_and_sd <- cbcl_means %>% left_join(cbcl_sds, by = c("prem_cat","task"))
+```
+
+
+```{r theme set, echo = FALSE, include = FALSE, message = FALSE, warning = FALSE}
+theme_set(theme_light())
+
+spread_ncog_means <- ncog_means %>% spread(task,mean)
+spread_cbcl_means <- cbcl_means %>% spread(task, mean)
+```
+
+```{r show table, echo = FALSE, message = FALSE, warning = FALSE}
+dat %>% 
+  group_by(prem_cat) %>% 
+  count() %>%
+  rename("Prematurity" = "prem_cat") %>%
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left") %>%
+  footnote(general = c("Full term = Born 37+ weeks", "Very premature = Born 31 weeks or less"))
+```
+
+<hr><br>
+
+# Analysis {.tabset .tabset-fade}
+
+## Neurocognition {.tabset .tabset-fade}
+
+### Raw Scores {.tabset .tabset-fade}
+
+#### nihtb card sort
+
+```{r nihtb card sort raw, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = nihtbx_cardsort_rawscore, fill = prem_cat)) +
+  geom_histogram(bins = 35) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_cardsort_rawscore, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_cardsort_rawscore,
+  ylab = "Average Raw Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_cardsort_rawscore") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+
+card_sort_raw_t <- t.test(dat$nihtbx_cardsort_rawscore~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### nihtb flanker
+
+```{r nihtb flanker raw, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = nihtbx_flanker_rawscore, fill = prem_cat)) +
+  geom_histogram(bins = 35) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_flanker_rawscore, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_flanker_rawscore,
+  ylab = "Average Raw Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_flanker_rawscore") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+
+
+card_sort_raw_t <- t.test(dat$nihtbx_flanker_rawscore~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### nihtb picture
+
+```{r nihtb picture raw, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = nihtbx_picture_rawscore, fill = prem_cat)) +
+  geom_histogram(bins = 35) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_picture_rawscore, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_picture_rawscore,
+  ylab = "Average Raw Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_picture_rawscore") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$nihtbx_picture_rawscore~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### nihtb pattern comparison
+
+```{r nihtb pattern raw, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = nihtbx_pattern_rawscore, fill = prem_cat)) +
+  geom_histogram(bins = 40) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_pattern_rawscore, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_pattern_rawscore,
+  ylab = "Average Raw Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_pattern_rawscore") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$nihtbx_pattern_rawscore~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### nihtb list sort
+
+```{r nihtb list sort raw, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = nihtbx_list_rawscore, fill = prem_cat)) +
+  geom_histogram(bins = 40) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_list_rawscore, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_list_rawscore,
+  ylab = "Average Raw Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_list_rawscore") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$nihtbx_list_rawscore~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+<hr><br>
+
+
+### Uncorrected Scores {.tabset .tabset-fade}
+
+#### nihtb card sort
+
+```{r nihtb card sort uncorrected, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+hist <- dat %>% ggplot(aes(x = nihtbx_cardsort_uncorrected, fill = prem_cat)) +
+  geom_histogram(bins = 35) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_cardsort_uncorrected, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_cardsort_uncorrected,
+  ylab = "Average Uncorrected Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_un_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_cardsort_uncorrected") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_un_t
+card_sort_raw_t <- t.test(dat$nihtbx_cardsort_uncorrected~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### nihtb reading
+
+```{r nihtb reading uncorrected, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = nihtbx_reading_uncorrected, fill = prem_cat)) +
+  geom_histogram(bins = 35) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_reading_uncorrected, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_reading_uncorrected,
+  ylab = "Average Uncorrected Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_reading_uncorrected") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$nihtbx_reading_uncorrected~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### nihtb flanker
+
+```{r nihtb flanker uncorrected, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = nihtbx_flanker_uncorrected, fill = prem_cat)) +
+  geom_histogram(bins = 35) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_flanker_uncorrected, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_flanker_uncorrected,
+  ylab = "Average Uncorrected Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_flanker_uncorrected") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$nihtbx_flanker_uncorrected~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### nihtb picvocab
+
+```{r nihtb picvocab uncorrected, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = nihtbx_picvocab_uncorrected, fill = prem_cat)) +
+  geom_histogram(bins = 35) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_picvocab_uncorrected, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_picvocab_uncorrected,
+  ylab = "Average Uncorrected Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_picvocab_uncorrected") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$nihtbx_picvocab_uncorrected~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### nihtb picture
+
+```{r nihtb picture uncorrected, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = nihtbx_picture_uncorrected, fill = prem_cat)) +
+  geom_histogram(bins = 35) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_picture_uncorrected, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_picture_uncorrected,
+  ylab = "Average Uncorrected Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_picture_uncorrected") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$nihtbx_picture_uncorrected~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### nihtb pattern comparison
+
+```{r nihtb pattern uncorrected, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = nihtbx_pattern_uncorrected, fill = prem_cat)) +
+  geom_histogram(bins = 35) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_pattern_uncorrected, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_pattern_uncorrected,
+  ylab = "Average Uncorrected Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_pattern_uncorrected") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$nihtbx_pattern_uncorrected~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### nihtb list sort
+
+```{r nihtb list uncorrected, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = nihtbx_list_uncorrected, fill = prem_cat)) +
+  geom_histogram(bins = 35) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = nihtbx_list_uncorrected, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = nihtbx_list_uncorrected,
+  ylab = "Average Uncorrected Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "nihtbx_list_uncorrected") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$nihtbx_list_uncorrected~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+<hr><br>
+
+
+### Little Man Task {.tabset .tabset-fade}
+
+#### LMT Avg Reaction Time (ms)
+
+```{r LMT avg RT, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = lmt_scr_avg_rt, fill = prem_cat)) +
+  geom_histogram(bins = 35) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = lmt_scr_avg_rt, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = lmt_scr_avg_rt,
+  ylab = "Average Reaction Time (ms)",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "lmt_scr_avg_rt") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$lmt_scr_avg_rt~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### LMT Avg Score Correct
+
+```{r LMT avg score, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = lmt_scr_num_correct, fill = prem_cat)) +
+  geom_histogram(bins = 30) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = lmt_scr_num_correct, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = lmt_scr_num_correct,
+  ylab = "Average Number Correct",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "lmt_scr_num_correct") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$lmt_scr_num_correct~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+<hr><br>
+
+
+### Pearson/RAVLT tasks {.tabset .tabset-fade}
+
+#### RAVLT Short Delay Trial I
+
+```{r RAVLT Short Delay Trial I, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_i_tc, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_i_tc, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = pea_ravlt_sd_trial_i_tc,
+  ylab = "Average Number Correct",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "pea_ravlt_sd_trial_i_tc") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$pea_ravlt_sd_trial_i_tc~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### RAVLT Short Delay Trial II
+
+```{r RAVLT Short Delay Trial II, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_ii_tc, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_ii_tc, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = pea_ravlt_sd_trial_ii_tc,
+  ylab = "Average Number Correct",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "pea_ravlt_sd_trial_ii_tc") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$pea_ravlt_sd_trial_ii_tc~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### RAVLT Short Delay Trial III
+
+```{r RAVLT Short Delay Trial III, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_iii_tc, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_iii_tc, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = pea_ravlt_sd_trial_iii_tc,
+  ylab = "Average Number Correct",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "pea_ravlt_sd_trial_iii_tc") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$pea_ravlt_sd_trial_iii_tc~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### RAVLT Short Delay Trial IV
+
+```{r RAVLT Short Delay Trial IV, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_iv_tc, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_iv_tc, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = pea_ravlt_sd_trial_iv_tc,
+  ylab = "Average Number Correct",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "pea_ravlt_sd_trial_iv_tc") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$pea_ravlt_sd_trial_iv_tc~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### RAVLT Short Delay Trial V
+
+```{r RAVLT Short Delay Trial V, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_v_tc, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_v_tc, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = pea_ravlt_sd_trial_v_tc,
+  ylab = "Average Number Correct",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "pea_ravlt_sd_trial_v_tc") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$pea_ravlt_sd_trial_v_tc~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### RAVLT Short Delay Trial VI
+
+```{r RAVLT Short Delay Trial VI, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_vi_tc, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = pea_ravlt_sd_trial_vi_tc, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = pea_ravlt_sd_trial_vi_tc,
+  ylab = "Average Number Correct",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "pea_ravlt_sd_trial_vi_tc") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$pea_ravlt_sd_trial_vi_tc~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### RAVLT Long Delay Trial VII
+
+```{r RAVLT Long Delay Trial VII, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = pea_ravlt_ld_trial_vii_tc, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = pea_ravlt_ld_trial_vii_tc, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = pea_ravlt_ld_trial_vii_tc,
+  ylab = "Average Number Correct",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "pea_ravlt_ld_trial_vii_tc") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$pea_ravlt_ld_trial_vii_tc~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### RAVLT Short Delay List B
+
+```{r RAVLT Short Delay List B, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = pea_ravlt_sd_listb_tc, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = pea_ravlt_sd_listb_tc, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = pea_ravlt_sd_listb_tc,
+  ylab = "Average Number Correct",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "pea_ravlt_sd_listb_tc") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$pea_ravlt_sd_listb_tc~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+#### Pearson Matrix Reasoning
+
+```{r RAVLT mtx reasoning, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = pea_wiscv_trs, fill = prem_cat)) +
+  geom_histogram(bins = 30) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = pea_wiscv_trs, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = pea_wiscv_trs,
+  ylab = "Average Number Correct",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- ncog_means_and_sd %>%
+  filter(task == "pea_wiscv_trs") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$pea_wiscv_trs~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+<hr><br>
+
+
+
+##
+
+## CBCL {.tabset .tabset-hide}
+
+### Anxiety/Depression
+```{r CBCL Anxiety Depression, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_syn_anxdep_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_syn_anxdep_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = cbcl_scr_syn_anxdep_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_syn_anxdep_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_syn_anxdep_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### WithDep
+```{r CBCL With Dep, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_syn_withdep_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_syn_withdep_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = cbcl_scr_syn_withdep_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_syn_withdep_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_syn_withdep_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Somatic
+```{r CBCL Somatic, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_syn_somatic_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_syn_somatic_r	, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = cbcl_scr_syn_somatic_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_syn_somatic_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_syn_somatic_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Social
+```{r CBCL social, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_syn_social_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_syn_social_r	, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = cbcl_scr_syn_social_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_syn_social_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_syn_social_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Thought
+```{r CBCL thought, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_syn_thought_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_syn_thought_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = cbcl_scr_syn_thought_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_syn_thought_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_syn_thought_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Attention
+```{r CBCL attention, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_syn_attention_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_syn_attention_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = cbcl_scr_syn_attention_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_syn_attention_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_syn_attention_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Rule Break
+```{r CBCL rule break, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_syn_rulebreak_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_syn_rulebreak_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_syn_rulebreak_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_syn_rulebreak_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_syn_rulebreak_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Aggressive
+```{r CBCL Aggressive, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_syn_aggressive_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_syn_aggressive_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_syn_aggressive_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_syn_aggressive_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_syn_aggressive_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Internal
+```{r CBCL Internal, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_syn_internal_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_syn_internal_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_syn_internal_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_syn_internal_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_syn_internal_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### External
+```{r CBCL External, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_syn_external_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_syn_external_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_syn_external_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_syn_external_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_syn_external_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Total Problems
+```{r CBCL Total Problems, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_syn_totprob_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_syn_totprob_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_syn_totprob_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_syn_totprob_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_syn_totprob_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Depression DSM 5
+```{r Depression DSM 5, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_depress_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_depress_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_dsm5_depress_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_dsm5_depress_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_dsm5_depress_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Anxiety Disorder DSM 5
+```{r Anxiety DSM 5, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_anxdisord_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_anxdisord_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_dsm5_anxdisord_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_dsm5_anxdisord_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_dsm5_anxdisord_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Somatic Problems DSM 5
+```{r Somatic DSM 5, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_somaticpr_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_somaticpr_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_dsm5_somaticpr_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_dsm5_somaticpr_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_dsm5_somaticpr_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### ADHD DSM 5
+```{r ADHD DSM 5, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_adhd_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_adhd_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_dsm5_adhd_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_dsm5_adhd_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_dsm5_adhd_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Opposite Sx DSM 5
+```{r Opposite Sx DSM 5, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_opposit_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_opposit_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_dsm5_opposit_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_dsm5_opposit_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_dsm5_opposit_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Conduct DSM 5
+```{r Conduct DSM 5, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_conduct_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_dsm5_conduct_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_dsm5_conduct_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_dsm5_conduct_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_dsm5_conduct_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Sluggish Cognitive Tempo
+```{r Sluggish, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_07_sct_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_07_sct_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_07_sct_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_07_sct_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_07_sct_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### OCD
+```{r OCD, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_07_ocd_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_07_ocd_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_07_ocd_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_07_ocd_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_07_ocd_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+### Stress
+```{r Stress, echo = FALSE, message=FALSE, warning=FALSE, fig.width=12,fig.height=6}
+
+hist <- dat %>% ggplot(aes(x = cbcl_scr_07_stress_r, fill = prem_cat)) +
+  geom_histogram(bins = 15) +
+  guides(fill = FALSE) + 
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+dens <- dat %>% ggplot(aes(x = cbcl_scr_07_stress_r, fill = prem_cat)) +
+  geom_density(alpha = 0.3) +
+  guides(fill = FALSE) +
+  labs(x = "") +
+  theme(text = element_text(size = 14))
+
+barp <- ggbetweenstats(
+  data = dat,
+  x = prem_cat,
+  xlab = "Premature Category",
+  y = 	cbcl_scr_07_stress_r,
+  ylab = "Average Syndrome Score",
+  mean.plotting = TRUE,
+  mean.label.size = 3,
+  type = "parametric",
+  k = 3,
+  pairwise.comparisons = TRUE,
+  pairwise.annotation = "asterisk",
+  ggstatsplot.layer = FALSE,
+  package = "wesanderson",
+  palette = "Darjeeling1",
+  message = FALSE
+)
+
+card_sort_t <- cbcl_means_and_sd %>%
+  filter(task == "cbcl_scr_07_stress_r") %>%
+  select(-task) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+
+ggdraw() +
+  draw_plot(dens, x = 0.5, y = 0, width = 0.5, height = 0.5) +
+  draw_plot(hist, x = 0.5, y = 0.5, width = 0.5, height = 0.5) +
+  draw_plot(barp, x = 0, y = 0, height = 1, width = 0.5)
+
+card_sort_t
+card_sort_raw_t <- t.test(dat$cbcl_scr_07_stress_r~dat$premature_category)
+sprintf("The p-value is %.3f", card_sort_raw_t$p.value)
+```
+
+##
+
+## Neurocog Summary Table {.tabset .tabset-fade}
+
+```{r cognitive tables, echo = FALSE, message=FALSE, warning=FALSE}
+ncog_means_and_sd %>% 
+  select(task, prem_cat, mean, sd) %>%
+  mutate(prem_cat = fct_reorder(prem_cat, mean)) %>%
+  arrange(task, desc(prem_cat)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+```
+
+## 
+
+## CBCL Summary Table {.tabset .tabset-fade}
+
+```{r cbcl tables, echo = FALSE, message=FALSE, warning=FALSE}
+cbcl_means_and_sd %>% 
+  select(task, prem_cat, mean, sd) %>%
+  mutate(prem_cat = fct_reorder(prem_cat, mean)) %>%
+  arrange(task, desc(prem_cat)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = T, position = "left") %>%
+  collapse_rows(columns = 1, valign = "top")
+```
+
+## 
+
+## p-tables {.tabset .tabset-fade}
+```{r p tables, message = FALSE, echo = FALSE}
+
+cbcl_d <- dat %>%
+  select("src_subject_id", "prem_cat", contains("cbcl")) %>%
+  gather(task, value, contains("cbcl")) %>%
+  group_by(task) %>% nest() %>% mutate(test_results = map(data, ~ tidy(t.test(value ~ prem_cat, data = .x)))) %>% unnest(test_results) %>% select("task", "p.value")
+
+ncog_d <- dat %>%
+  select("src_subject_id", "prem_cat", nihtbx_cardsort_rawscore:pea_wiscv_trs, -nihtbx_reading_rawscore, -nihtbx_picvocab_rs) %>%
+  gather(task, value, nihtbx_cardsort_rawscore:pea_wiscv_trs) %>%
+  group_by(task) %>% nest() %>%
+  mutate(test_results = map(data, ~ tidy(t.test(value ~ prem_cat, data = .x)))) %>% 
+  unnest(test_results) %>%
+  select("task", "p.value") 
+
+ncog_d %>% 
+  kable(digits = 3, align = "l") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = F, position = "float_left", font_size = 14)
+
+# kable(list(ncog_d, cbcl_d), digits = 3, align = "l") %>%
+#  kable_styling(bootstrap_options = "bordered", full_width = T, position = "center")
+
+cbcl_d %>% 
+  kable(digits = 3, align = "l") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = F, position = "float_left", font_size = 14)
+
+```
+
+#
