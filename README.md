@@ -4,6 +4,5 @@ This is an interactive HTML page I made using R Markdown for an analysis examini
 
 This was sort of quickly hacked together. I realize now a better way to do this would probably be to make a Shiny App instead.
 
-<center>
+
 ![Alt text](demo-premat.gif)
-</center>
